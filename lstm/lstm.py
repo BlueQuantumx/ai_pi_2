@@ -53,11 +53,10 @@ class LSTM(nn.Module):
     def __init__(self, hidden_size, num_layers, vocab_size, pad_token_id):
         super().__init__()
         self.hidden_size = hidden_size
-        self.embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=pad_token_id)
         self.cells = nn.ModuleList([LSTMCell(hidden_size) for _ in range(num_layers)])
 
     def forward(self, x: Tensor, init_states: Optional[tuple[Tensor, Tensor]] = None):
-        _, batch_size = x.size()
+        _, batch_size, _ = x.size()
         if init_states is None:
             h_t, c_t = (
                 torch.zeros(batch_size, self.hidden_size).to(x.device),
@@ -65,7 +64,6 @@ class LSTM(nn.Module):
             )
         else:
             h_t, c_t = init_states
-        x = self.embedding(x)
         for cell in self.cells:
             x, (h_t, c_t) = cell(x, (h_t, c_t))
         return x, (h_t, c_t)
