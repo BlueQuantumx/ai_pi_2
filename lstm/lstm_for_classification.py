@@ -22,8 +22,7 @@ class LstmForClassification(nn.Module):
 
     def forward(self, x: Tensor, labels: Tensor):
         x = self.embedding(x)
-        hidden_seq, _ = self.lstm(x)
-        logits = self.fc(hidden_seq[-1])  # [batch_size, num_labels]
-        logits = torch.sigmoid(logits)
+        _, (hidden_state, _) = self.lstm(x)
+        logits = self.fc(hidden_state)  # [batch_size, num_labels]
         loss = nn.CrossEntropyLoss()(logits, labels)
         return loss, logits

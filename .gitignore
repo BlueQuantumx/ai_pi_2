@@ -1,3 +1,4 @@
 aclImdb/
 bert_pretrained/
 .vscode/
+__pycache__/

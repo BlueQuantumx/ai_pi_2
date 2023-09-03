@@ -50,7 +50,7 @@ class LSTMCell(nn.Module):
 
 
 class LSTM(nn.Module):
-    def __init__(self, hidden_size, num_layers, vocab_size, pad_token_id):
+    def __init__(self, hidden_size, num_layers):
         super().__init__()
         self.hidden_size = hidden_size
         self.cells = nn.ModuleList([LSTMCell(hidden_size) for _ in range(num_layers)])
