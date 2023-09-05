@@ -23,14 +23,14 @@ class SelfAttention(nn.Module):
     def forward(
         self,
         x: Tensor,
-        attention_mask: Optional[Tensor] = None,
+        # attention_mask: Optional[Tensor] = None,
         key_padding_mask: Optional[Tensor] = None,
     ) -> Tensor:
         q = self.Wq(x)
         k = self.Wk(x)
         v = self.Wv(x)
         attn_output, attn_output_weights = self.multi_head_attention(
-            q, k, v, attn_mask=attention_mask
+            q, k, v, key_padding_mask=key_padding_mask
         )
         return attn_output
 
@@ -56,11 +56,9 @@ class BertAttention(nn.Module):
     def forward(
         self,
         hidden_states: Tensor,
-        attention_mask: Optional[Tensor] = None,
+        key_padding_mask: Optional[Tensor] = None,
     ) -> Tensor:
-        self_outputs = self.attn(
-            hidden_states, attention_mask=None, key_padding_mask=attention_mask
-        )
+        self_outputs = self.attn(hidden_states, key_padding_mask=key_padding_mask)
         attention_output = self.output(self_outputs, hidden_states)
         return attention_output
 
@@ -97,9 +95,9 @@ class BertEncoder(nn.Module):
     def forward(
         self,
         hidden_states: Tensor,
-        attention_mask: Optional[Tensor] = None,
+        key_padding_mask: Optional[Tensor] = None,
     ) -> Tensor:
-        attn = self.attn(hidden_states, attention_mask)
+        attn = self.attn(hidden_states, key_padding_mask)
         hidden_states = self.attn_output(attn, hidden_states)
         intermediate = self.intermediate(hidden_states)
         intermediate = self.intermediate_dense(intermediate)
