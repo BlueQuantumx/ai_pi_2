@@ -13,8 +13,15 @@ from .embedding import BertEmbedding
 
 
 class SelfAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads, dropout) -> None:
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        dropout,
+        output_attention,
+    ) -> None:
         super().__init__()
+        self.output_attention = output_attention
         self.Wq = nn.Linear(embed_dim, embed_dim)
         self.Wk = nn.Linear(embed_dim, embed_dim)
         self.Wv = nn.Linear(embed_dim, embed_dim)
@@ -30,9 +37,9 @@ class SelfAttention(nn.Module):
         k = self.Wk(x)
         v = self.Wv(x)
         attn_output, attn_output_weights = self.multi_head_attention(
-            q, k, v, key_padding_mask=key_padding_mask
+            q, k, v, key_padding_mask=key_padding_mask, average_attn_weights=False
         )
-        return attn_output
+        return attn_output, attn_output_weights if self.output_attention else None
 
 
 class BertOutput(nn.Module):
@@ -48,9 +55,17 @@ class BertOutput(nn.Module):
 
 
 class BertAttention(nn.Module):
-    def __init__(self, hidden_size, num_attention_heads, hidden_dropout_prob) -> None:
+    def __init__(
+        self,
+        hidden_size,
+        num_attention_heads,
+        hidden_dropout_prob,
+        output_attentions,
+    ) -> None:
         super().__init__()
-        self.attn = SelfAttention(hidden_size, num_attention_heads, hidden_dropout_prob)
+        self.attn = SelfAttention(
+            hidden_size, num_attention_heads, hidden_dropout_prob, output_attentions
+        )
         self.output = BertOutput(hidden_size, hidden_dropout_prob)
 
     def forward(
@@ -58,9 +73,11 @@ class BertAttention(nn.Module):
         hidden_states: Tensor,
         key_padding_mask: Optional[Tensor] = None,
     ) -> Tensor:
-        self_outputs = self.attn(hidden_states, key_padding_mask=key_padding_mask)
+        self_outputs, attention_weights = self.attn(
+            hidden_states, key_padding_mask=key_padding_mask
+        )
         attention_output = self.output(self_outputs, hidden_states)
-        return attention_output
+        return attention_output, attention_weights
 
 
 class BertIntermediate(nn.Module):
@@ -84,9 +101,13 @@ class BertEncoder(nn.Module):
         num_attention_heads,
         intermediate_size,
         hidden_dropout_prob,
+        output_attentions,
     ) -> None:
         super().__init__()
-        self.attn = BertAttention(hidden_size, num_attention_heads, hidden_dropout_prob)
+        self.output_attentions = output_attentions
+        self.attn = BertAttention(
+            hidden_size, num_attention_heads, hidden_dropout_prob, output_attentions
+        )
         self.attn_output = BertOutput(hidden_size, hidden_dropout_prob)
         self.intermediate = BertIntermediate(hidden_size, intermediate_size)
         self.intermediate_dense = nn.Linear(intermediate_size, hidden_size)
@@ -97,12 +118,12 @@ class BertEncoder(nn.Module):
         hidden_states: Tensor,
         key_padding_mask: Optional[Tensor] = None,
     ) -> Tensor:
-        attn = self.attn(hidden_states, key_padding_mask)
+        attn, attention_weights = self.attn(hidden_states, key_padding_mask)
         hidden_states = self.attn_output(attn, hidden_states)
         intermediate = self.intermediate(hidden_states)
         intermediate = self.intermediate_dense(intermediate)
         hidden_states = self.intermediate_output(intermediate, hidden_states)
-        return hidden_states
+        return hidden_states, attention_weights
 
 
 class BertPooler(nn.Module):
@@ -131,8 +152,10 @@ class BertLayers(nn.Module):
         intermediate_size,
         hidden_dropout_prob,
         num_hidden_layers,
+        output_attentions,
     ) -> None:
         super().__init__()
+        self.output_attentions = output_attentions
         self.layers = nn.ModuleList(
             [
                 BertEncoder(
@@ -140,6 +163,7 @@ class BertLayers(nn.Module):
                     num_attention_heads,
                     intermediate_size,
                     hidden_dropout_prob,
+                    output_attentions,
                 )
                 for _ in range(num_hidden_layers)
             ]
@@ -150,9 +174,13 @@ class BertLayers(nn.Module):
         hidden_states: Tensor,
         attention_mask: Optional[Tensor] = None,
     ) -> Tensor:
+        attentions = []
         for layer in self.layers:
-            hidden_states = layer(hidden_states, attention_mask)
-        return hidden_states
+            layer_outputs = layer(hidden_states, attention_mask)
+            hidden_states = layer_outputs[0]
+            if self.output_attentions:
+                attentions.append(layer_outputs[1])
+        return (hidden_states, attentions if self.output_attentions else None)
 
 
 class BertModel(nn.Module):
@@ -165,9 +193,11 @@ class BertModel(nn.Module):
         num_attention_heads,
         hidden_dropout_prob,
         num_hidden_layers,
+        output_attentions,
     ):
         super().__init__()
         self.hidden_size = d_model
+        self.output_attentions = output_attentions
         self.bert_embedding = BertEmbedding(
             vocab_size, d_model, 0, max_position_embeddings, 1, hidden_dropout_prob
         )
@@ -177,6 +207,7 @@ class BertModel(nn.Module):
             intermediate_size,
             hidden_dropout_prob,
             num_hidden_layers,
+            output_attentions,
         )
         self.bert_pooler = BertPooler(hidden_size=d_model)
 
@@ -203,7 +234,7 @@ class BertModel(nn.Module):
             embedding_output, attention_mask=attention_mask
         )
         # sequence_output: [src_len, batch_size, hidden_size]
-        pooled_output = self.bert_pooler(sequence_output)
+        pooled_output = self.bert_pooler(sequence_output[0])
         # 默认是最后一层的first token 即[cls]位置经dense + tanh 后的结果
         # pooled_output: [batch_size, hidden_size]
-        return pooled_output
+        return (pooled_output, sequence_output[-1] if self.output_attentions else None)
