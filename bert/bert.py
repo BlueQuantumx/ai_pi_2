@@ -176,10 +176,9 @@ class BertLayers(nn.Module):
     ) -> Tensor:
         attentions = []
         for layer in self.layers:
-            layer_outputs = layer(hidden_states, attention_mask)
-            hidden_states = layer_outputs[0]
+            hidden_states, attention = layer(hidden_states, attention_mask)
             if self.output_attentions:
-                attentions.append(layer_outputs[1])
+                attentions.append(attention)
         return (hidden_states, attentions if self.output_attentions else None)
 
 
@@ -230,11 +229,11 @@ class BertModel(nn.Module):
             token_type_ids=token_type_ids,
         )
         # embedding_output: [src_len, batch_size, hidden_size]
-        sequence_output = self.bert_layers(
+        sequence_output, attention_weights = self.bert_layers(
             embedding_output, attention_mask=attention_mask
         )
         # sequence_output: [src_len, batch_size, hidden_size]
-        pooled_output = self.bert_pooler(sequence_output[0])
+        pooled_output = self.bert_pooler(sequence_output)
         # 默认是最后一层的first token 即[cls]位置经dense + tanh 后的结果
         # pooled_output: [batch_size, hidden_size]
-        return (pooled_output, sequence_output[-1] if self.output_attentions else None)
+        return pooled_output, attention_weights

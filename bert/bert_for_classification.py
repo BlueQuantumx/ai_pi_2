@@ -31,11 +31,9 @@ class BertForClassification(nn.Module):
         self.classifier = nn.Linear(d_model, num_labels)
 
     def forward(self, input_ids, labels, attention_mask=None, token_type_ids=None):
-        bert_output = self.bert(
+        bert_output, attention_weights = self.bert(
             input_ids, attention_mask, token_type_ids
         )  # [batch_size, hidden_size]
-        logits = self.classifier(bert_output[0])  # [batch_size, num_labels]
+        logits = self.classifier(bert_output)  # [batch_size, num_labels]
         loss = nn.CrossEntropyLoss()(logits, labels)
-        if self.output_attentions:
-            return loss, logits, bert_output[-1]
-        return loss, logits
+        return loss, logits, attention_weights
