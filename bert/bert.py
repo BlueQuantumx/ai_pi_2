@@ -193,8 +193,10 @@ class BertModel(nn.Module):
         hidden_dropout_prob,
         num_hidden_layers,
         output_attentions,
+        need_pooled: bool = True,
     ):
         super().__init__()
+        self.need_pooled = need_pooled
         self.hidden_size = d_model
         self.output_attentions = output_attentions
         self.bert_embedding = BertEmbedding(
@@ -208,7 +210,8 @@ class BertModel(nn.Module):
             num_hidden_layers,
             output_attentions,
         )
-        self.bert_pooler = BertPooler(hidden_size=d_model)
+        if self.need_pooled:
+            self.bert_pooler = BertPooler(hidden_size=d_model)
 
     def forward(
         self,
@@ -233,7 +236,9 @@ class BertModel(nn.Module):
             embedding_output, attention_mask=attention_mask
         )
         # sequence_output: [src_len, batch_size, hidden_size]
-        pooled_output = self.bert_pooler(sequence_output)
         # 默认是最后一层的first token 即[cls]位置经dense + tanh 后的结果
         # pooled_output: [batch_size, hidden_size]
-        return pooled_output, attention_weights
+        return (
+            self.bert_pooler(sequence_output) if self.need_pooled else sequence_output,
+            attention_weights,
+        )
