@@ -1,4 +1,7 @@
 aclImdb/
 bert_pretrained/
+imdb_mlm_model/
 .vscode/
+.conda/
 __pycache__/
+*.pt*
